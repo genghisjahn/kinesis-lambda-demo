@@ -1,0 +1,5 @@
+Create Go Code that Writes A MathProblem to a Kinesis Shard
+Create Lambda Add + Multiplier
+The two lamba's process the result and send it to S3
+  file name will be add-uuid or multi-uuid.
+  it contains the problem and the answer.
