@@ -20,8 +20,13 @@ type mathProblem struct {
 }
 
 func main() {
-	if len(os.Args) > 1 {
-		rawData := os.Args[1]
+	log.Println("-----")
+	for _, v := range os.Args {
+		log.Println(v)
+	}
+	log.Println("-----")
+	if len(os.Args) > 0 {
+		rawData := os.Args[0]
 		sDec, errDec := base64.StdEncoding.DecodeString(rawData)
 		if errDec != nil {
 			log.Println("Error:", errDec)
@@ -40,7 +45,7 @@ func main() {
 		writeToBuck(filename, answer)
 		return
 	}
-	log.Println("Error: os.Args was 1 length.")
+	log.Println("Error: os.Args was 0 length.")
 }
 
 func writeToBuck(f string, a string) {
