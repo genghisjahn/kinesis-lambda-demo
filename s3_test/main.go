@@ -18,8 +18,8 @@ func main() {
 	//region.S3Endpoint = "http://s3.amazonaws.com"
 	//region.S3BucketEndpoint = "math-demo2"
 	S3 := s3.New(auth, aws.APNortheast)
-	bucket := S3.Bucket("math-demo2")
-	//errPut := bucket.PutBucket(s3.Private)
+	bucket := S3.Bucket("math-results")
+	// errPut := bucket.PutBucket(s3.Private)
 	// if errPut != nil {
 	// 	log.Println("Error Put", errPut)
 	// }
