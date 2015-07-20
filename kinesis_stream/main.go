@@ -20,13 +20,14 @@ func main() {
 	auth := aws.Auth{AccessKey: pub, SecretKey: secret}
 	K := kinesis.New(auth, aws.USEast)
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		problemMap := make(map[string]int)
 		problemMap["Num1"] = rand.Intn(100)
 		problemMap["Num2"] = rand.Intn(100)
 		jsonData, jsonErr := json.Marshal(problemMap)
 		if jsonErr != nil {
 			log.Println("Error:", jsonErr)
+			continue
 		}
 		wg.Add(1)
 		go func() {
