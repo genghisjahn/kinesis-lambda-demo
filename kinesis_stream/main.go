@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/AdRoll/goamz/aws"
@@ -18,7 +19,7 @@ func main() {
 	var secret = os.Getenv("AWSSecret")
 	auth := aws.Auth{AccessKey: pub, SecretKey: secret}
 	K := kinesis.New(auth, aws.USEast)
-
+	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		problemMap := make(map[string]int)
 		problemMap["Num1"] = rand.Intn(100)
@@ -27,13 +28,15 @@ func main() {
 		if jsonErr != nil {
 			log.Println("Error:", jsonErr)
 		}
-
-		_, err2 := K.PutRecord("math-problems", "math-p", jsonData, "", "")
-		log.Println(problemMap["Num1"], "+", problemMap["Num2"], "...sent!")
-		if err2 != nil {
-			log.Println("Error:", err2)
-		}
-
-		time.Sleep(10 * time.Millisecond)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err2 := K.PutRecord("math-problems", "math-p", jsonData, "", "")
+			log.Println(problemMap["Num1"], "+", problemMap["Num2"], "...sent!")
+			if err2 != nil {
+				log.Println("Error:", err2)
+			}
+		}()
+		wg.Wait()
 	}
 }
