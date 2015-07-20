@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,12 +26,9 @@ func main() {
 	log.Println("-----")
 	if len(os.Args) > 0 {
 		rawData := os.Args[0]
-		sDec, errDec := base64.StdEncoding.DecodeString(rawData)
-		if errDec != nil {
-			log.Println("Error:", errDec)
-		}
+
 		var mp mathProblem
-		err := json.Unmarshal([]byte(sDec), &mp)
+		err := json.Unmarshal([]byte(rawData), &mp)
 		if err != nil {
 			log.Println("Error:", err)
 			return
