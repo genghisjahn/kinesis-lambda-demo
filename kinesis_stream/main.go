@@ -33,7 +33,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			_, err2 := K.PutRecord("math-problems", "math-p", jsonData, "", "")
-			log.Println(problemMap["Num1"], "+", problemMap["Num2"], "...sent!")
+			log.Println("[", problemMap["Num1"], ",", problemMap["Num2"], "] ...sent!")
 			if err2 != nil {
 				log.Println("Error:", err2)
 			}
