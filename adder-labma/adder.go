@@ -24,8 +24,8 @@ func main() {
 		log.Println(v)
 	}
 	log.Println("-----")
-	if len(os.Args) > 0 {
-		rawData := os.Args[0]
+	if len(os.Args) > 1 {
+		rawData := os.Args[1]
 
 		var mp mathProblem
 		err := json.Unmarshal([]byte(rawData), &mp)
@@ -41,11 +41,15 @@ func main() {
 		writeToBuck(filename, answer)
 		return
 	}
-	log.Println("Error: os.Args was 0 length.")
+	log.Println("Error: os.Args was 1 length.")
 }
 
 func writeToBuck(f string, a string) {
-	var auth aws.Auth
+	auth, authErr := aws.GetAuth("", "", "", time.Time{})
+	if authErr != nil {
+		log.Println("Error:", authErr)
+		return
+	}
 	S3 := s3.New(auth, aws.APNortheast)
 	bucket := S3.Bucket("math-answers")
 	err := bucket.Put(f, []byte(a), "text/plain", s3.PublicRead, s3.Options{})
