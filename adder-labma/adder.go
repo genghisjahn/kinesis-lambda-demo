@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/AdRoll/goamz/aws"
@@ -30,7 +31,7 @@ func main() {
 			log.Println("Error:", err)
 			return
 		}
-		t := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
+		t := strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
 		h := md5.New()
 		io.WriteString(h, fmt.Sprintf("add-%v", t))
 		filename := fmt.Sprintf("add-%x", h.Sum(nil))
