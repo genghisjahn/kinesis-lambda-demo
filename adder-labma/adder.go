@@ -21,7 +21,10 @@ type mathProblem struct {
 }
 
 func main() {
-
+	for k, v := range os.Args {
+		log.Println(k, v)
+	}
+	log.Println("-----")
 	if len(os.Args) > 1 {
 		rawData := os.Args[1]
 
