@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -19,11 +20,7 @@ type mathProblem struct {
 }
 
 func main() {
-	log.Println("-----")
-	for _, v := range os.Args {
-		log.Println(v)
-	}
-	log.Println("-----")
+
 	if len(os.Args) > 1 {
 		rawData := os.Args[1]
 
@@ -44,14 +41,26 @@ func main() {
 	log.Println("Error: os.Args was 1 length.")
 }
 
+func getSettings() (string, string, error) {
+	file, err := ioutil.ReadFile("./settings.json")
+	if err != nil {
+		return "", "", nil
+	}
+	settingsMap := make(map[string]string)
+	json.Unmarshal(file, &settingsMap)
+	return settingsMap["Access"], settingsMap["Secret"], nil
+}
+
 func writeToBuck(f string, a string) {
-	auth, authErr := aws.GetAuth("", "", "", time.Time{})
-	if authErr != nil {
-		log.Println("Error:", authErr)
+	p, s, setErr := getSettings()
+	if setErr != nil {
+		log.Println("Error:", setErr)
 		return
 	}
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+
 	S3 := s3.New(auth, aws.APNortheast)
-	bucket := S3.Bucket("math-answers")
+	bucket := S3.Bucket("math-results")
 	err := bucket.Put(f, []byte(a), "text/plain", s3.PublicRead, s3.Options{})
 	if err != nil {
 		log.Println("ERROR:", err)
