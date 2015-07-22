@@ -18,6 +18,7 @@ func main() {
 	if len(os.Args) > 1 {
 		return
 	}
+	//TODO, add the call to downloadFromBucket
 	log.Println("Error: os.Args was 1 length.")
 }
 
