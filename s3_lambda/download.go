@@ -16,10 +16,21 @@ func main() {
 	}
 	log.Println("-----")
 	if len(os.Args) > 1 {
+		data, err := downloadFromBucket("csv-stream-demo", "data.csv")
+		if err != nil {
+			log.Println("Error:", err)
+		}
+		errDB := copyDataToDB(data)
+		if errDB != nil {
+			log.Println("Error:", errDB)
+		}
 		return
 	}
-	//TODO, add the call to downloadFromBucket
 	log.Println("Error: os.Args was 1 length.")
+}
+
+func copyDataToDB(data []byte) error {
+	return nil
 }
 
 func getSettings() (string, string, error) {
@@ -32,22 +43,21 @@ func getSettings() (string, string, error) {
 	return settingsMap["Access"], settingsMap["Secret"], nil
 }
 
-func downloadFromBucket(b string, f string) {
+func downloadFromBucket(b string, f string) ([]byte, error) {
 	p, s, setErr := getSettings()
 	if setErr != nil {
-		log.Println("Error:", setErr)
-		return
+		return nil, setErr
 	}
 	auth := aws.Auth{AccessKey: p, SecretKey: s}
 
-	S3 := s3.New(auth, aws.APNortheast)
+	S3 := s3.New(auth, aws.USEast)
 	bucket := S3.Bucket(b)
 	log.Println("Starting Get...")
 	data, err := bucket.Get(f)
 	if err != nil {
-		log.Println("ERROR:", err)
-		return
+		return nil, err
 	}
 	log.Println("All Done!")
 	log.Println("Length:", len(data))
+	return data, nil
 }
