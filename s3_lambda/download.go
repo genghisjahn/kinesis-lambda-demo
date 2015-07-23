@@ -10,6 +10,28 @@ import (
 	"github.com/AdRoll/goamz/s3"
 )
 
+type DBInfo struct {
+	Host     string
+	Database string
+	Username string
+	Password string
+}
+
+func getDBSettings() *DBInfo {
+	file, err := ioutil.ReadFile("./settings.json")
+	if err != nil {
+		log.Println("Error:", err)
+		return nil
+	}
+	db := DBInfo{}
+	err2 := json.Unmarshal(file, &db)
+	if err2 != nil {
+		log.Println("Error:", err2)
+		return nil
+	}
+	return &db
+}
+
 func main() {
 	for k, v := range os.Args {
 		log.Println(k, v)
