@@ -80,7 +80,7 @@ func copyDataToDB(data []byte) error {
 		log.Println(errT)
 		return errT
 	}
-	stmt, errPrep := txn.Prepare(pq.CopyIn("user_data", "userID", "email"))
+	stmt, errPrep := txn.Prepare(pq.CopyIn("userdata", "userid", "jobid"))
 	if errPrep != nil {
 		log.Fatal(errPrep)
 	}
@@ -99,9 +99,12 @@ func copyDataToDB(data []byte) error {
 			fmt.Println("Error:", err)
 			return err
 		}
-
+		//Just simulate pulling text out of the csv data
 		email := record[0]
-		userID, _ := strconv.Atoi(record[1])
+		_ = email
+		_, _ = strconv.Atoi(record[1])
+		//**************
+
 		wg.Add(1)
 		go func(id int, e string) {
 			defer wg.Done()
@@ -109,7 +112,7 @@ func copyDataToDB(data []byte) error {
 			if errA != nil {
 				log.Fatal(errA)
 			}
-		}(userID, email)
+		}(lineCount+1, "jobid123")
 		lineCount++
 		if lineCount == 1000000 {
 			break
@@ -145,6 +148,10 @@ func getSettings() (string, string, error) {
 	settingsMap := make(map[string]string)
 	json.Unmarshal(file, &settingsMap)
 	return settingsMap["Access"], settingsMap["Secret"], nil
+}
+
+func generateLanguage() {
+
 }
 
 func downloadFromBucket(b string, f string) ([]byte, error) {
