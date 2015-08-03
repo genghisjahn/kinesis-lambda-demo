@@ -157,7 +157,7 @@ func copyDataToDB(data []byte) error {
 			if errA != nil {
 				log.Fatal(errA)
 			}
-		}(userID, jobid)
+		}(lineCount+1, jobid)
 		lineCount++
 		if lineCount == 1000000 {
 			break
