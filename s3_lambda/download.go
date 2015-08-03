@@ -45,7 +45,41 @@ func getDBSettings() *dbInfo {
 	return &db
 }
 
+type createdata func([]int) error
+
+func createUserData() {
+	ids := getUserIDs()
+	return
+	cdata := []createdata{createLang, createDevices, createGroups, createSubscriptions}
+	for _, v := range cdata {
+		if dataErr := v(ids); dataErr != nil {
+			panic(fmt.Sprintf("%v - %v", v, dataErr))
+		}
+	}
+}
+
+func createLang(ids []int) error {
+	return fmt.Errorf("Not implemented")
+}
+
+func createDevices(ids []int) error {
+	return fmt.Errorf("Not implemented")
+
+}
+
+func createGroups(ids []int) error {
+	return fmt.Errorf("Not implemented")
+
+}
+
+func createSubscriptions(ids []int) error {
+	return fmt.Errorf("Not implemented")
+
+}
+
 func main() {
+	createUserData()
+	return
 	for k, v := range os.Args {
 		log.Println(k, v)
 	}
@@ -66,6 +100,17 @@ func main() {
 		return
 	}
 	log.Println("Error: os.Args was 1 length.")
+}
+
+func getUserIDs() []int {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	log.Println("Connected...")
+	return nil
 }
 
 func copyDataToDB(data []byte) error {
