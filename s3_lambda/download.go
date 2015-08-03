@@ -78,8 +78,8 @@ func createSubscriptions(ids []int) error {
 }
 
 func main() {
-	createUserData()
-	return
+	//createUserData()
+	//return
 	for k, v := range os.Args {
 		log.Println(k, v)
 	}
@@ -125,7 +125,7 @@ func copyDataToDB(data []byte) error {
 		log.Println(errT)
 		return errT
 	}
-	stmt, errPrep := txn.Prepare(pq.CopyIn("user_data", "userID", "email"))
+	stmt, errPrep := txn.Prepare(pq.CopyIn("userdata", "userid", "jobid"))
 	if errPrep != nil {
 		log.Fatal(errPrep)
 	}
@@ -146,7 +146,10 @@ func copyDataToDB(data []byte) error {
 		}
 
 		email := record[0]
+		_ = email
+		jobid := "abc123"
 		userID, _ := strconv.Atoi(record[1])
+		_ = userID
 		wg.Add(1)
 		go func(id int, e string) {
 			defer wg.Done()
@@ -154,7 +157,7 @@ func copyDataToDB(data []byte) error {
 			if errA != nil {
 				log.Fatal(errA)
 			}
-		}(userID, email)
+		}(userID, jobid)
 		lineCount++
 		if lineCount == 1000000 {
 			break
