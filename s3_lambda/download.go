@@ -4,6 +4,7 @@ import (
 	"bytes"
 	cr "crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -12,15 +13,25 @@ import (
 	"log"
 	mr "math/rand"
 	"os"
-	"runtime"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/s3"
+	"github.com/AdRoll/goamz/sqs"
 	"github.com/lib/pq"
 )
+
+var SQS *sqs.SQS
+
+var bufferCount = 50 //Playing with this get's different speep through puts.
+//The mbAir needs it around 50 or it starts erroring out.
+//The mbPro can handle higher values, but diminishing returns.
+
+//But, even set at 50, the mbAir can put 100,000 items in the queu in  48 seconds.
+
+var sem = make(chan bool, bufferCount)
 
 type dbInfo struct {
 	Host     string
@@ -243,21 +254,60 @@ func createSubscriptions(ids []int) error {
 
 }
 
+func proxySNS(msgs []sqs.Message) {
+	pub, sec, _ := getSettings()
+	q, err := getQueue("sns-prox", pub, sec)
+	if err != nil {
+		panic(err)
+	}
+	sqs, _ := q.GetQueue("sns-prox")
+	_, respErr := sqs.SendMessageBatch(msgs)
+	if respErr != nil {
+		log.Println("ERROR:", respErr)
+	}
+}
+
 func main() {
-	//pagecount := getDevicesByTopicIDPageCount(1)
+	//pagecount := getDevicesByTopicIDPageCount(1
+	// n := runtime.NumCPU()
+	// log.Println("Num CPUS:", n)
+	// runtime.GOMAXPROCS(n)
 	var arns []string
 	log.Println("Start...")
-	arns = getDevicesArnsByTopicIDPage(1, 18, 10000)
-	log.Println(arns[3453])
+	arns = getDevicesArnsByTopicIDPage(1, 1, 10000)
+	msgSlice := make([]sqs.Message, 0, 10)
+	msgAll := [][]sqs.Message{}
+	for _, v := range arns {
+		tempData := fmt.Sprintf("arn:%v|DEMOJSONPAYLOADDATA!!!!!!!!!", v)
+		msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
+		msgSlice = append(msgSlice, msg)
+		if len(msgSlice) == 10 {
+			msgAll = append(msgAll, msgSlice)
+			msgSlice = []sqs.Message{}
+		}
+	}
+	for _, s := range msgAll {
+		s := s //It's idomatic go I swear! http://golang.org/doc/effective_go.html#channels
+
+		//Using the Semaphore
+		sem <- true
+		go func(sl10 []sqs.Message) {
+			proxySNS(sl10)
+			defer func() { <-sem }()
+		}(s)
+		//******************
+
+		//Running sequentially.
+		//addToQuestionQ(s, *questionq)
+		//******************
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- true
+	}
 	log.Println("End...")
-	log.Println("Start...")
-	arns = getDevicesArnsByTopicIDPage(1, 12, 10000)
-	log.Println(arns[3453])
-	log.Println("End...")
+
 	return
-	n := runtime.NumCPU()
-	log.Println("Num CPUS:", n)
-	runtime.GOMAXPROCS(n)
+
 	pagecount := 21
 	log.Println("Page Count:", pagecount)
 	var wg sync.WaitGroup
@@ -517,4 +567,16 @@ func downloadFromBucket(b string, f string) ([]byte, error) {
 	}
 	log.Println("Completed Get!", len(data))
 	return data, nil
+}
+
+func getQueue(name, public, secret string) (*sqs.Queue, error) {
+	auth := aws.Auth{AccessKey: public, SecretKey: secret}
+	region := aws.Region{}
+	region.Name = "us-east-1"
+	region.SQSEndpoint = "http://sqs.us-east-1.amazonaws.com"
+	SQS = sqs.New(auth, region)
+	if SQS == nil {
+		return nil, fmt.Errorf("Can't get sqs reference for %v %v", auth, region)
+	}
+	return SQS.GetQueue(name)
 }
