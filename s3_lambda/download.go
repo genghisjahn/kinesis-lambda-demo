@@ -13,6 +13,7 @@ import (
 	"log"
 	mr "math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -256,11 +257,10 @@ func createSubscriptions(ids []int) error {
 
 func proxySNS(msgs []sqs.Message) {
 	pub, sec, _ := getSettings()
-	q, err := getQueue("sns-prox", pub, sec)
+	sqs, err := getQueue("sns-prox", pub, sec)
 	if err != nil {
 		panic(err)
 	}
-	sqs, _ := q.GetQueue("sns-prox")
 	_, respErr := sqs.SendMessageBatch(msgs)
 	if respErr != nil {
 		log.Println("ERROR:", respErr)
@@ -269,16 +269,18 @@ func proxySNS(msgs []sqs.Message) {
 
 func main() {
 	//pagecount := getDevicesByTopicIDPageCount(1
-	// n := runtime.NumCPU()
-	// log.Println("Num CPUS:", n)
-	// runtime.GOMAXPROCS(n)
+	n := runtime.NumCPU()
+	log.Println("Num CPUS:", n)
+	runtime.GOMAXPROCS(n)
+	mr.Seed(time.Now().UnixNano())
+	randomPage := mr.Intn(20) + 1
 	var arns []string
-	log.Println("Start...")
-	arns = getDevicesArnsByTopicIDPage(1, 1, 10000)
+	log.Println("Start...Page:", randomPage)
+	arns = getDevicesArnsByTopicIDPage(1, randomPage, 50000)
 	msgSlice := make([]sqs.Message, 0, 10)
 	msgAll := [][]sqs.Message{}
 	for _, v := range arns {
-		tempData := fmt.Sprintf("arn:%v|DEMOJSONPAYLOADDATA!!!!!!!!!", v)
+		tempData := fmt.Sprintf("arn:%v|DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!", v)
 		msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
 		msgSlice = append(msgSlice, msg)
 		if len(msgSlice) == 10 {
@@ -295,11 +297,7 @@ func main() {
 			proxySNS(sl10)
 			defer func() { <-sem }()
 		}(s)
-		//******************
 
-		//Running sequentially.
-		//addToQuestionQ(s, *questionq)
-		//******************
 	}
 	for i := 0; i < cap(sem); i++ {
 		sem <- true
