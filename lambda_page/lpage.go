@@ -16,7 +16,7 @@ import (
 )
 
 var SQS *sqs.SQS
-var bufferCount = 50
+var bufferCount = 100
 var sem = make(chan bool, bufferCount)
 
 func main() {
@@ -193,9 +193,9 @@ func getQueue(name, public, secret string) (*sqs.Queue, error) {
 	region := aws.Region{}
 	region.Name = "us-east-1"
 	region.SQSEndpoint = "http://sqs.us-east-1.amazonaws.com"
-	SQS = sqs.New(auth, region)
-	if SQS == nil {
+	awssqs := sqs.New(auth, region)
+	if awssqs == nil {
 		return nil, fmt.Errorf("Can't get sqs reference for %v %v", auth, region)
 	}
-	return SQS.GetQueue(name)
+	return awssqs.GetQueue(name)
 }
