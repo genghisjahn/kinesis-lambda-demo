@@ -72,7 +72,7 @@ func main() {
 						log.Println("Error:", jsonErr)
 						break
 					}
-					_, err := K.PutRecord("topic-message-age", "topic-page", jsonData, "", "")
+					_, err := K.PutRecord("topic-message-page", "topic-page", jsonData, "", "")
 					if err != nil {
 						log.Println("Error:", err)
 					}
