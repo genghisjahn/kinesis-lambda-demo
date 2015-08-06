@@ -9,7 +9,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"sync"
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/sqs"
@@ -61,17 +60,18 @@ func main() {
 						msgSlice = []sqs.Message{}
 					}
 				}
-				var wg sync.WaitGroup
+				//var wg sync.WaitGroup
 				for _, s := range msgAll {
 					s := s //It's idomatic go I swear! http://golang.org/doc/effective_go.html#channels
-					wg.Add(1)
-					go func(sl10 []sqs.Message) {
+					//wg.Add(1)
+					//go func(sl10 []sqs.Message) {
+					func(sl10 []sqs.Message) {
 						proxySNS(sl10)
-						defer wg.Done()
+						//defer wg.Done()
 					}(s)
 
 				}
-				wg.Wait()
+				//wg.Wait()
 				log.Println("All done!")
 			}
 		}
@@ -179,6 +179,8 @@ func proxySNS(msgs []sqs.Message) {
 	_, respErr := sqs.SendMessageBatch(msgs)
 	if respErr != nil {
 		log.Println("ERROR:", respErr)
+	} else {
+		log.Println("Success writing batch:", len(msgs))
 	}
 }
 
