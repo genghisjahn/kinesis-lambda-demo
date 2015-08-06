@@ -47,8 +47,8 @@ func main() {
 		if err != nil {
 			log.Println("Error Kinesisis Payload:", err)
 		}
-		log.Println("Record Count:", len(kpayload.Records))
 		for _, v := range kpayload.Records {
+			log.Println("Record:", v)
 			var tm topicMessage
 			sDec, errDec := base64.StdEncoding.DecodeString(v.Kinesis.Data)
 			if errDec != nil {
