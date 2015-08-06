@@ -16,6 +16,8 @@ import (
 )
 
 var SQS *sqs.SQS
+var bufferCount = 50
+var sem = make(chan bool, bufferCount)
 
 func main() {
 	n := runtime.NumCPU()
@@ -60,18 +62,20 @@ func main() {
 						msgSlice = []sqs.Message{}
 					}
 				}
-				//var wg sync.WaitGroup
 				for _, s := range msgAll {
 					s := s //It's idomatic go I swear! http://golang.org/doc/effective_go.html#channels
-					//wg.Add(1)
-					//go func(sl10 []sqs.Message) {
-					func(sl10 []sqs.Message) {
+
+					//Using the Semaphore
+					sem <- true
+					go func(sl10 []sqs.Message) {
 						proxySNS(sl10)
-						//defer wg.Done()
+						defer func() { <-sem }()
 					}(s)
 
 				}
-				//wg.Wait()
+				for i := 0; i < cap(sem); i++ {
+					sem <- true
+				}
 				log.Println("All done!")
 			}
 		}
