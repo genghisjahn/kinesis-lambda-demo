@@ -13,6 +13,7 @@ import (
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/sqs"
+	_ "github.com/lib/pq"
 )
 
 var SQS *sqs.SQS

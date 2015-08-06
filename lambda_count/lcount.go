@@ -11,6 +11,7 @@ import (
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/kinesis"
+	_ "github.com/lib/pq"
 )
 
 type dbInfo struct {
