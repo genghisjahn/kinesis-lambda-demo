@@ -47,10 +47,12 @@ func main() {
 					return
 				}
 				arns := getDevicesArnsByTopicIDPage(tpm.TopicID, tpm.PageNum, 10000)
+				//This should return the arn & the lang for the user
+				//we'd then pull the correct iten out of the message map
 				msgSlice := make([]sqs.Message, 0, 10)
 				msgAll := [][]sqs.Message{}
 				for _, v := range arns {
-					tempData := fmt.Sprintf("arn:%v|DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!", v)
+					tempData := fmt.Sprintf("arn:%v|%v", v, tpm.Message)
 					msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
 					msgSlice = append(msgSlice, msg)
 					if len(msgSlice) == 10 {
