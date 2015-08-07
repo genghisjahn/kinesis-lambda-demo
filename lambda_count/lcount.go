@@ -70,6 +70,7 @@ func main() {
 					tpm.PageNum = i + 1
 					if i+1 == pageCount {
 						tpm.LastPage = true
+						log.Println("LastPage is", i+1)
 					}
 					jsonData, jsonErr := json.Marshal(&tpm)
 					if jsonErr != nil {
