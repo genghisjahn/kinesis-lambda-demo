@@ -79,8 +79,11 @@ func main() {
 				}
 				log.Println("All done!")
 			}
+			if tpm.PageNum == 1 {
+				publishPageComplete(1)
+			}
 			if tpm.LastPage {
-				publishLastPage(tpm.PageNum)
+				publishPageComplete(tpm.PageNum)
 			}
 		}
 		return
@@ -88,7 +91,7 @@ func main() {
 	}
 	log.Println("Error: os.Args was 1 length.")
 }
-func publishLastPage(pagenum int) error {
+func publishPageComplete(pagenum int) error {
 	topicarn, topicErr := getTopicArn()
 	if topicErr != nil {
 		log.Println(topicErr)
