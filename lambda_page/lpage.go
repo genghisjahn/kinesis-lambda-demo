@@ -17,7 +17,7 @@ import (
 )
 
 var SQS *sqs.SQS
-var bufferCount = 200
+var bufferCount = 400
 var sem = make(chan bool, bufferCount)
 
 func main() {
