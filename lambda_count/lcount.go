@@ -11,6 +11,7 @@ import (
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/kinesis"
+	"github.com/AdRoll/goamz/sns"
 	_ "github.com/lib/pq"
 )
 
@@ -63,6 +64,7 @@ func main() {
 					return
 				}
 				pageCount := getDevicesByTopicIDPageCount(tm.TopicID)
+				publishMessage("Count: 1st page sent")
 				for i := 0; i < pageCount; i++ {
 					tpm := topicPageMessage{}
 					tpm.Message = tm.Message
@@ -78,6 +80,9 @@ func main() {
 						break
 					}
 					_, err := K.PutRecord("topic-message-page", "topic-page", jsonData, "", "")
+					if tpm.LastPage {
+						publishMessage(fmt.Sprintf("Count: Last Page Sent: %v", pageCount))
+					}
 					if err != nil {
 						log.Println("Error:", err)
 					}
@@ -162,4 +167,40 @@ type KinesisPayload struct {
 			SequenceNumber       string `json:"sequenceNumber"`
 		} `json:"kinesis"`
 	} `json:"Records"`
+}
+
+func publishMessage(msg string) error {
+	topicarn, topicErr := getTopicArn()
+	if topicErr != nil {
+		log.Println(topicErr)
+		return topicErr
+	}
+	p, s, _ := getSettings()
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.Region{}
+	region.Name = "us-east-1"
+	region.SNSEndpoint = "http://sns.us-east-1.amazonaws.com"
+	awssns, _ := sns.New(auth, region)
+	if awssns == nil {
+		return fmt.Errorf("Can't get sns reference for %v %v", auth, region)
+	}
+	opt := sns.PublishOptions{}
+	opt.TopicArn = topicarn
+	opt.Message = msg
+	opt.Subject = msg
+	_, pubErr := awssns.Publish(&opt)
+	if pubErr != nil {
+		return pubErr
+	}
+	return nil
+}
+
+func getTopicArn() (string, error) {
+	file, err := ioutil.ReadFile("./settings.json")
+	if err != nil {
+		return "", err
+	}
+	settingsMap := make(map[string]string)
+	json.Unmarshal(file, &settingsMap)
+	return settingsMap["Topicarn"], nil
 }
