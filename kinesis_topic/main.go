@@ -19,7 +19,7 @@ func main() {
 	auth := aws.Auth{AccessKey: pub, SecretKey: secret}
 	K := kinesis.New(auth, aws.USEast)
 	tm := topicMessage{}
-	tm.TopicID = 1
+	tm.TopicID = 5
 	tm.Message = "THIS IS THIS MESSAGE PAYLOAD THAT WILL GO TO THE USER!!!!!"
 
 	jsonData, jsonErr := json.Marshal(&tm)
