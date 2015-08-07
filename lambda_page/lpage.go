@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/sns"
 	"github.com/AdRoll/goamz/sqs"
 	_ "github.com/lib/pq"
 )
@@ -78,11 +79,40 @@ func main() {
 				}
 				log.Println("All done!")
 			}
+			if tpm.LastPage {
+				publishLastPage(tpm.PageNum)
+			}
 		}
 		return
 
 	}
 	log.Println("Error: os.Args was 1 length.")
+}
+func publishLastPage(pagenum int) error {
+	topicarn, topicErr := getTopicArn()
+	if topicErr != nil {
+		log.Println(topicErr)
+		return topicErr
+	}
+	p, s, _ := getSettings()
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.Region{}
+	region.Name = "us-east-1"
+	region.SNSEndpoint = "http://sns.us-east-1.amazonaws.com"
+	awssns, _ := sns.New(auth, region)
+	if awssns == nil {
+		return fmt.Errorf("Can't get sns reference for %v %v", auth, region)
+	}
+	msg := fmt.Sprintf("Page %v complete.", pagenum)
+	opt := sns.PublishOptions{}
+	opt.TopicArn = topicarn
+	opt.Message = msg
+	opt.Subject = msg
+	_, pubErr := awssns.Publish(&opt)
+	if pubErr != nil {
+		return pubErr
+	}
+	return nil
 }
 
 func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
@@ -119,9 +149,10 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 }
 
 type topicPageMessage struct {
-	TopicID int    `json:"topic_id"`
-	Message string `json:"message"`
-	PageNum int    `json:"page_num"`
+	TopicID  int    `json:"topic_id"`
+	Message  string `json:"message"`
+	PageNum  int    `json:"page_num"`
+	LastPage bool   `json:"last_page"`
 }
 
 type KinesisPayload struct {
@@ -140,6 +171,16 @@ type KinesisPayload struct {
 			SequenceNumber       string `json:"sequenceNumber"`
 		} `json:"kinesis"`
 	} `json:"Records"`
+}
+
+func getTopicArn() (string, error) {
+	file, err := ioutil.ReadFile("./settings.json")
+	if err != nil {
+		return "", err
+	}
+	settingsMap := make(map[string]string)
+	json.Unmarshal(file, &settingsMap)
+	return settingsMap["Topicarn"], nil
 }
 
 func getSettings() (string, string, error) {

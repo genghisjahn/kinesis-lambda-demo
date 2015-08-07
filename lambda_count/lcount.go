@@ -27,9 +27,10 @@ type topicMessage struct {
 }
 
 type topicPageMessage struct {
-	TopicID int    `json:"topic_id"`
-	Message string `json:"message"`
-	PageNum int    `json:"page_num"`
+	TopicID  int    `json:"topic_id"`
+	Message  string `json:"message"`
+	PageNum  int    `json:"page_num"`
+	LastPage bool   `json:"last_page"`
 }
 
 func main() {
@@ -67,6 +68,9 @@ func main() {
 					tpm.Message = tm.Message
 					tpm.TopicID = tm.TopicID
 					tpm.PageNum = i + 1
+					if i+1 == pageCount {
+						tpm.LastPage = true
+					}
 					jsonData, jsonErr := json.Marshal(&tpm)
 					if jsonErr != nil {
 						log.Println("Error:", jsonErr)
