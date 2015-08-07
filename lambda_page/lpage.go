@@ -54,6 +54,7 @@ func main() {
 				//we'd then pull the correct iten out of the message map
 				msgSlice := make([]sqs.Message, 0, 10)
 				msgAll := [][]sqs.Message{}
+				log.Printf("Started page %v\n", tpm.PageNum)
 				for _, v := range arns {
 					tempData := fmt.Sprintf("arn:%v|%v", v, tpm.Message)
 					msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
@@ -85,6 +86,8 @@ func main() {
 			if tpm.LastPage {
 				publishPageComplete(tpm.PageNum)
 			}
+			log.Printf("Completed page %v\n", tpm.PageNum)
+
 		}
 		return
 
@@ -227,8 +230,6 @@ func proxySNS(msgs []sqs.Message) {
 	_, respErr := sqs.SendMessageBatch(msgs)
 	if respErr != nil {
 		log.Println("ERROR:", respErr)
-	} else {
-		log.Println("Success writing batch:", len(msgs))
 	}
 }
 
