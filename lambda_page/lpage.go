@@ -36,9 +36,6 @@ func main() {
 		if err != nil {
 			log.Println("Error Kinesisis Payload:", err)
 		}
-		recrun := false
-		lastrun := false
-		lastpage := 0
 		for _, v := range kpayload.Records {
 			log.Println("Record:", v)
 			var tpm topicPageMessage
@@ -83,20 +80,14 @@ func main() {
 				}
 				log.Println("All done!")
 			}
-			if tpm.PageNum == 1 && !recrun {
+			if tpm.PageNum == 1 {
 				publishPageComplete(1)
 			}
-			recrun = true
 			if tpm.LastPage {
-				lastrun = true
-				lastpage = tpm.PageNum
 				publishPageComplete(tpm.PageNum)
 			}
 			log.Printf("Completed page %v\n", tpm.PageNum)
 
-		}
-		if lastrun {
-			publishPageComplete(lastpage)
 		}
 		return
 
