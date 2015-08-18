@@ -58,13 +58,13 @@ func main() {
 					log.Println("Error:", errJSON)
 					return
 				}
+				msgstart := fmt.Sprintf("Started page %v\n", tpm.PageNum)
+				WriteLogMessage(msgstart)
 				arns := getDevicesArnsByTopicIDPage(tpm.TopicID, tpm.PageNum, 10000)
 				//This should return the arn & the lang for the user
 				//we'd then pull the correct iten out of the message map
 				msgSlice := make([]sqs.Message, 0, 10)
 				msgAll := [][]sqs.Message{}
-				msgstart := fmt.Sprintf("Started page %v\n", tpm.PageNum)
-				WriteLogMessage(msgstart)
 				log.Printf(msgstart)
 				for _, v := range arns {
 					tempData := fmt.Sprintf("arn:%v|%v", v, tpm.Message)
