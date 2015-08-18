@@ -135,6 +135,7 @@ func publishPageComplete(pagenum int) error {
 }
 
 func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
+	WriteLogMessage(fmt.Sprintf("DB Start: %v %v %v", topicID, pagenum, pagesize))
 	var arns []string
 	info := getDBSettings()
 	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
@@ -164,6 +165,8 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 		}
 		arns = append(arns, arn)
 	}
+	WriteLogMessage(fmt.Sprintf("DB End: %v %v %v", topicID, pagenum, pagesize))
+
 	return arns
 }
 
