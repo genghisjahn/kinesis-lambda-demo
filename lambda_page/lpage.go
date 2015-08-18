@@ -17,13 +17,18 @@ import (
 )
 
 var SQS *sqs.SQS
-var bufferCount = 2000
+var bufferCount = 600
 var sem = make(chan bool, bufferCount)
 
 func main() {
 	n := runtime.NumCPU()
 	log.Println("Num CPUS:", n)
 	runtime.GOMAXPROCS(n)
+	pub, sec, _ := getSettings()
+	sqsQ, err := getQueue("sns-prox", pub, sec)
+	if err != nil {
+		panic(err)
+	}
 	for k, v := range os.Args {
 		log.Println(k, v)
 	}
@@ -70,7 +75,7 @@ func main() {
 					//Using the Semaphore
 					sem <- true
 					go func(sl10 []sqs.Message) {
-						proxySNS(sl10)
+						proxySNS(sqsQ, sl10)
 						defer func() { <-sem }()
 					}(s)
 
@@ -221,13 +226,9 @@ type dbInfo struct {
 	Password string
 }
 
-func proxySNS(msgs []sqs.Message) {
-	pub, sec, _ := getSettings()
-	sqs, err := getQueue("sns-prox", pub, sec)
-	if err != nil {
-		panic(err)
-	}
-	_, respErr := sqs.SendMessageBatch(msgs)
+func proxySNS(q *sqs.Queue, msgs []sqs.Message) {
+
+	_, respErr := q.SendMessageBatch(msgs)
 	if respErr != nil {
 		log.Println("ERROR:", respErr)
 	}
