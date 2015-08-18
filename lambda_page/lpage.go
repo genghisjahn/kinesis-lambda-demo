@@ -22,6 +22,7 @@ var bufferCount = 100
 var sem = make(chan bool, bufferCount)
 
 func main() {
+
 	bufferCount = GetBufferCountFromDB()
 	log.Println("Buffer Count:", bufferCount)
 	n := runtime.NumCPU()
@@ -62,7 +63,9 @@ func main() {
 				//we'd then pull the correct iten out of the message map
 				msgSlice := make([]sqs.Message, 0, 10)
 				msgAll := [][]sqs.Message{}
-				log.Printf("Started page %v\n", tpm.PageNum)
+				msgstart := fmt.Sprintf("Started page %v\n", tpm.PageNum)
+				WriteLogMessage(msgstart)
+				log.Printf(msgstart)
 				for _, v := range arns {
 					tempData := fmt.Sprintf("arn:%v|%v", v, tpm.Message)
 					msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
@@ -94,7 +97,9 @@ func main() {
 			if tpm.LastPage {
 				publishPageComplete(tpm.PageNum)
 			}
-			log.Printf("Completed page %v\n", tpm.PageNum)
+			msgcomplete := fmt.Sprintf("Completed page %v\n", tpm.PageNum)
+			WriteLogMessage(msgcomplete)
+			log.Printf(msgcomplete)
 
 		}
 		return
@@ -160,6 +165,22 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 		arns = append(arns, arn)
 	}
 	return arns
+}
+
+func WriteLogMessage(msg string) {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	_, err := db.Query(`
+		insert into logtimes (message) values ($1);
+	;`, msg)
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func GetBufferCountFromDB() int {
