@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strconv"
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/sns"
@@ -17,10 +18,12 @@ import (
 )
 
 var SQS *sqs.SQS
-var bufferCount = 600
+var bufferCount = 100
 var sem = make(chan bool, bufferCount)
 
 func main() {
+	bufferCount = GetBufferCountFromDB()
+	log.Println("Buffer Count:", bufferCount)
 	n := runtime.NumCPU()
 	log.Println("Num CPUS:", n)
 	runtime.GOMAXPROCS(n)
@@ -157,6 +160,39 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 		arns = append(arns, arn)
 	}
 	return arns
+}
+
+func GetBufferCountFromDB() int {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	rows, err := db.Query(`
+		select
+			s.value
+		from
+			lambdasettings s
+		where
+			s.name= 'buffercount'
+	;`)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var strval string
+		errScan := rows.Scan(&strval)
+		if errScan != nil {
+			panic(errScan)
+		}
+		bc, cErr := strconv.Atoi(strval)
+		if cErr != nil {
+			panic(cErr)
+		}
+		return bc
+	}
+	return 100
 }
 
 type topicPageMessage struct {
