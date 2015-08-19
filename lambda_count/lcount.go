@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/kinesis"
@@ -113,7 +114,6 @@ func getDevicesByTopicIDPageCount(topicID int) int {
 		where
 			s.topicid= $1 and
 			s.userID=u.userid
-
 ;`, topicID)
 	if err != nil {
 		panic(err)
@@ -122,6 +122,10 @@ func getDevicesByTopicIDPageCount(topicID int) int {
 	errScan := rows.Scan(&count)
 	if errScan != nil {
 		panic(errScan)
+	}
+	dbcount := GetPageCountFromDB()
+	if dbcount > 0 {
+		return dbcount
 	}
 	return count
 }
@@ -134,6 +138,39 @@ func getSettings() (string, string, error) {
 	settingsMap := make(map[string]string)
 	json.Unmarshal(file, &settingsMap)
 	return settingsMap["Access"], settingsMap["Secret"], nil
+}
+
+func GetPageCountFromDB() int {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	rows, err := db.Query(`
+		select
+			s.value
+		from
+			lambdasettings s
+		where
+			s.name= 'pagecount'
+	;`)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var strval string
+		errScan := rows.Scan(&strval)
+		if errScan != nil {
+			panic(errScan)
+		}
+		bc, cErr := strconv.Atoi(strval)
+		if cErr != nil {
+			panic(cErr)
+		}
+		return bc
+	}
+	return 0
 }
 
 func getDBSettings() *dbInfo {
