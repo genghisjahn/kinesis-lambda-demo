@@ -65,7 +65,7 @@ func main() {
 				}
 				pageCount := getDevicesByTopicIDPageCount(tm.TopicID)
 				publishMessage("Count: 1st page sent")
-				pageCount = 1
+				pageCount = 2
 				for i := 0; i < pageCount; i++ {
 					tpm := topicPageMessage{}
 					tpm.Message = tm.Message
