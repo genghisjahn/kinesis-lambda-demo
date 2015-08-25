@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
+	"net/http"
 	"os"
 	"strconv"
 
@@ -39,7 +39,10 @@ type topicPageMessage struct {
 
 func TestAdd() {
 	pub, secret, sg, _ := getSettings()
-	AddIPToGroup(pub, secret, sg)
+	err1 := AddIPToGroup(pub, secret, sg)
+	err2 := RemoveIPFromGroup(pub, secret, sg)
+	log.Println(err1)
+	log.Println(err2)
 }
 
 func main() {
@@ -75,7 +78,7 @@ func main() {
 				}
 				AddIPToGroup(pub, secret, sg)
 				pageCount := getDevicesByTopicIDPageCount(tm.TopicID)
-				RemoveIPFromGroup(sg)
+				RemoveIPFromGroup(pub, secret, sg)
 				publishMessage("Count: 1st page sent")
 				for i := 0; i < pageCount; i++ {
 					tpm := topicPageMessage{}
@@ -109,23 +112,58 @@ func main() {
 	log.Println("Error: os.Args was 1 length.")
 }
 func AddIPToGroup(p string, s string, secGroup string) error {
-	ec2 := ec2.EC2{}
 	auth := aws.Auth{AccessKey: p, SecretKey: s}
-	region := aws.Region{}
-	region.Name = "us-east-1"
-	ec2.Auth = auth
-	ec2.Region = region
-	addrs, err := net.InterfaceAddrs()
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	resp, err := http.Get("https://api.ipify.org/")
 	if err != nil {
-		panic(err)
+		log.Println("GetIP Error:", err)
 	}
-	for i, addr := range addrs {
-		log.Printf("%d %v\n", i, addr)
+	defer resp.Body.Close()
+	contents, _ := ioutil.ReadAll(resp.Body)
+	IPAddress := string(contents)
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", IPAddress)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errAdd := ec2item.AuthorizeSecurityGroup(g, perms)
+	if errAdd != nil {
+		log.Println("ERROR:", errAdd)
+	} else {
+		log.Println("Complete! Added! for:", IPAddress)
 	}
-	return nil
+	return errAdd
 }
-func RemoveIPFromGroup(secGroup string) error {
-	return nil
+func RemoveIPFromGroup(p string, s string, secGroup string) error {
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	resp, err := http.Get("https://api.ipify.org/")
+	if err != nil {
+		log.Println("GetIP Error:", err)
+	}
+	defer resp.Body.Close()
+	contents, _ := ioutil.ReadAll(resp.Body)
+	IPAddress := string(contents)
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", IPAddress)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errRevoke := ec2item.RevokeSecurityGroup(g, perms)
+	if errRevoke != nil {
+		log.Println("ERROR:", errRevoke)
+	} else {
+		log.Println("Complete! Revoked! for:", IPAddress)
+	}
+	return errRevoke
 }
 
 func getDevicesByTopicIDPageCount(topicID int) int {
