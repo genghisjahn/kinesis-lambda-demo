@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"strconv"
 
 	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/ec2"
 	"github.com/AdRoll/goamz/kinesis"
 	"github.com/AdRoll/goamz/sns"
 	_ "github.com/lib/pq"
@@ -35,8 +37,15 @@ type topicPageMessage struct {
 	LastPage bool   `json:"last_page"`
 }
 
+func TestAdd() {
+	pub, secret, sg, _ := getSettings()
+	AddIPToGroup(pub, secret, sg)
+}
+
 func main() {
-	pub, secret, _ := getSettings()
+	TestAdd()
+	return
+	pub, secret, sg, _ := getSettings()
 	auth := aws.Auth{AccessKey: pub, SecretKey: secret}
 	K := kinesis.New(auth, aws.USEast)
 	for k, v := range os.Args {
@@ -64,7 +73,9 @@ func main() {
 					log.Println("Error:", errJSON)
 					return
 				}
+				AddIPToGroup(pub, secret, sg)
 				pageCount := getDevicesByTopicIDPageCount(tm.TopicID)
+				RemoveIPFromGroup(sg)
 				publishMessage("Count: 1st page sent")
 				for i := 0; i < pageCount; i++ {
 					tpm := topicPageMessage{}
@@ -96,6 +107,25 @@ func main() {
 
 	}
 	log.Println("Error: os.Args was 1 length.")
+}
+func AddIPToGroup(p string, s string, secGroup string) error {
+	ec2 := ec2.EC2{}
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.Region{}
+	region.Name = "us-east-1"
+	ec2.Auth = auth
+	ec2.Region = region
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		panic(err)
+	}
+	for i, addr := range addrs {
+		log.Printf("%d %v\n", i, addr)
+	}
+	return nil
+}
+func RemoveIPFromGroup(secGroup string) error {
+	return nil
 }
 
 func getDevicesByTopicIDPageCount(topicID int) int {
@@ -130,14 +160,14 @@ func getDevicesByTopicIDPageCount(topicID int) int {
 	return count
 }
 
-func getSettings() (string, string, error) {
+func getSettings() (string, string, string, error) {
 	file, err := ioutil.ReadFile("./settings.json")
 	if err != nil {
-		return "", "", nil
+		return "", "", "", nil
 	}
 	settingsMap := make(map[string]string)
 	json.Unmarshal(file, &settingsMap)
-	return settingsMap["Access"], settingsMap["Secret"], nil
+	return settingsMap["Access"], settingsMap["Secret"], settingsMap["SecGroup"], nil
 }
 
 func GetPageCountFromDB() int {
@@ -212,7 +242,7 @@ func publishMessage(msg string) error {
 		log.Println(topicErr)
 		return topicErr
 	}
-	p, s, _ := getSettings()
+	p, s, _, _ := getSettings()
 	auth := aws.Auth{AccessKey: p, SecretKey: s}
 	region := aws.Region{}
 	region.Name = "us-east-1"
