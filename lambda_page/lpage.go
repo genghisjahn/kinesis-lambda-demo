@@ -84,6 +84,7 @@ func main() {
 		return
 	}
 	pub, sec, sg, _ := getSettings()
+	defer RemoveIPFromGroup(pub, sec, sg)
 	AddIPToGroup(pub, sec, sg)
 	bufferCount = GetBufferCountFromDB()
 	log.Println("Buffer Count:", bufferCount)
