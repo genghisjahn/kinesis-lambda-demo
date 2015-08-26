@@ -37,17 +37,66 @@ type topicPageMessage struct {
 	LastPage bool   `json:"last_page"`
 }
 
-func TestAdd() {
-	pub, secret, sg, _ := getSettings()
-	err1 := AddIPToGroup(pub, secret, sg)
-	err2 := RemoveIPFromGroup(pub, secret, sg)
-	log.Println(err1)
-	log.Println(err2)
+var lambdaIP string
+
+func getlambdaIP() (string, error) {
+	resp, err := http.Get("https://api.ipify.org/")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	contents, _ := ioutil.ReadAll(resp.Body)
+	ip := string(contents)
+	return ip, nil
+}
+
+func AddIPToGroup(p string, s string, secGroup string) error {
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", lambdaIP)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errAdd := ec2item.AuthorizeSecurityGroup(g, perms)
+	if errAdd != nil {
+		log.Println("ERROR:", errAdd)
+	} else {
+		log.Println("Complete! Added! for:", lambdaIP)
+	}
+	return errAdd
+}
+func RemoveIPFromGroup(p string, s string, secGroup string) error {
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", lambdaIP)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errRevoke := ec2item.RevokeSecurityGroup(g, perms)
+	if errRevoke != nil {
+		log.Println("ERROR:", errRevoke)
+	} else {
+		log.Println("Complete! Revoked! for:", lambdaIP)
+	}
+	return errRevoke
 }
 
 func main() {
-	TestAdd()
-	return
+	var errIP error
+	if lambdaIP, errIP = getlambdaIP(); errIP != nil {
+		log.Println(errIP)
+		return
+	}
 	pub, secret, sg, _ := getSettings()
 	auth := aws.Auth{AccessKey: pub, SecretKey: secret}
 	K := kinesis.New(auth, aws.USEast)
@@ -110,60 +159,6 @@ func main() {
 
 	}
 	log.Println("Error: os.Args was 1 length.")
-}
-func AddIPToGroup(p string, s string, secGroup string) error {
-	auth := aws.Auth{AccessKey: p, SecretKey: s}
-	region := aws.USEast
-	ec2item := ec2.New(auth, region)
-
-	resp, err := http.Get("https://api.ipify.org/")
-	if err != nil {
-		log.Println("GetIP Error:", err)
-	}
-	defer resp.Body.Close()
-	contents, _ := ioutil.ReadAll(resp.Body)
-	IPAddress := string(contents)
-	g := ec2.SecurityGroup{Id: secGroup}
-	ipperm := ec2.IPPerm{}
-	ipperm.Protocol = "tcp"
-	ipperm.FromPort = 5432
-	ipperm.ToPort = 5432
-	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", IPAddress)}
-	perms := []ec2.IPPerm{ipperm}
-	_, errAdd := ec2item.AuthorizeSecurityGroup(g, perms)
-	if errAdd != nil {
-		log.Println("ERROR:", errAdd)
-	} else {
-		log.Println("Complete! Added! for:", IPAddress)
-	}
-	return errAdd
-}
-func RemoveIPFromGroup(p string, s string, secGroup string) error {
-	auth := aws.Auth{AccessKey: p, SecretKey: s}
-	region := aws.USEast
-	ec2item := ec2.New(auth, region)
-
-	resp, err := http.Get("https://api.ipify.org/")
-	if err != nil {
-		log.Println("GetIP Error:", err)
-	}
-	defer resp.Body.Close()
-	contents, _ := ioutil.ReadAll(resp.Body)
-	IPAddress := string(contents)
-	g := ec2.SecurityGroup{Id: secGroup}
-	ipperm := ec2.IPPerm{}
-	ipperm.Protocol = "tcp"
-	ipperm.FromPort = 5432
-	ipperm.ToPort = 5432
-	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", IPAddress)}
-	perms := []ec2.IPPerm{ipperm}
-	_, errRevoke := ec2item.RevokeSecurityGroup(g, perms)
-	if errRevoke != nil {
-		log.Println("ERROR:", errRevoke)
-	} else {
-		log.Println("Complete! Revoked! for:", IPAddress)
-	}
-	return errRevoke
 }
 
 func getDevicesByTopicIDPageCount(topicID int) int {

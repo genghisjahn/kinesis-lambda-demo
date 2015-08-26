@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"runtime"
 	"strconv"
 
 	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/ec2"
 	"github.com/AdRoll/goamz/sns"
 	"github.com/AdRoll/goamz/sqs"
 	_ "github.com/lib/pq"
@@ -21,14 +23,73 @@ var SQS *sqs.SQS
 var bufferCount = 100
 var sem = make(chan bool, bufferCount)
 
-func main() {
+var lambdaIP string
 
+func getlambdaIP() (string, error) {
+	resp, err := http.Get("https://api.ipify.org/")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	contents, _ := ioutil.ReadAll(resp.Body)
+	ip := string(contents)
+	return ip, nil
+}
+
+func AddIPToGroup(p string, s string, secGroup string) error {
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", lambdaIP)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errAdd := ec2item.AuthorizeSecurityGroup(g, perms)
+	if errAdd != nil {
+		log.Println("ERROR:", errAdd)
+	} else {
+		log.Println("Complete! Added! for:", lambdaIP)
+	}
+	return errAdd
+}
+func RemoveIPFromGroup(p string, s string, secGroup string) error {
+	auth := aws.Auth{AccessKey: p, SecretKey: s}
+	region := aws.USEast
+	ec2item := ec2.New(auth, region)
+
+	g := ec2.SecurityGroup{Id: secGroup}
+	ipperm := ec2.IPPerm{}
+	ipperm.Protocol = "tcp"
+	ipperm.FromPort = 5432
+	ipperm.ToPort = 5432
+	ipperm.SourceIPs = []string{fmt.Sprintf("%v/24", lambdaIP)}
+	perms := []ec2.IPPerm{ipperm}
+	_, errRevoke := ec2item.RevokeSecurityGroup(g, perms)
+	if errRevoke != nil {
+		log.Println("ERROR:", errRevoke)
+	} else {
+		log.Println("Complete! Revoked! for:", lambdaIP)
+	}
+	return errRevoke
+}
+
+func main() {
+	var errIP error
+	if lambdaIP, errIP = getlambdaIP(); errIP != nil {
+		log.Println(errIP)
+		return
+	}
+	pub, sec, sg, _ := getSettings()
+	AddIPToGroup(pub, sec, sg)
 	bufferCount = GetBufferCountFromDB()
 	log.Println("Buffer Count:", bufferCount)
 	n := runtime.NumCPU()
 	log.Println("Num CPUS:", n)
 	runtime.GOMAXPROCS(n)
-	pub, sec, _ := getSettings()
 	sqsQ, err := getQueue("sns-prox", pub, sec)
 	if err != nil {
 		panic(err)
@@ -113,7 +174,7 @@ func publishPageComplete(pagenum int) error {
 		log.Println(topicErr)
 		return topicErr
 	}
-	p, s, _ := getSettings()
+	p, s, _, _ := getSettings()
 	auth := aws.Auth{AccessKey: p, SecretKey: s}
 	region := aws.Region{}
 	region.Name = "us-east-1"
@@ -254,14 +315,14 @@ func getTopicArn() (string, error) {
 	return settingsMap["Topicarn"], nil
 }
 
-func getSettings() (string, string, error) {
+func getSettings() (string, string, string, error) {
 	file, err := ioutil.ReadFile("./settings.json")
 	if err != nil {
-		return "", "", nil
+		return "", "", "", nil
 	}
 	settingsMap := make(map[string]string)
 	json.Unmarshal(file, &settingsMap)
-	return settingsMap["Access"], settingsMap["Secret"], nil
+	return settingsMap["Access"], settingsMap["Secret"], settingsMap["SecGroup"], nil
 }
 
 func getDBSettings() *dbInfo {
