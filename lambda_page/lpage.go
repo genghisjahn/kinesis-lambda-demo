@@ -205,7 +205,7 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 	if errCon != nil {
 		log.Fatal(errCon)
 	}
-	rows, err := db.Query(`
+	stmt, err := db.Prepare(`
 		select
 			u.endpointarn
 		from
