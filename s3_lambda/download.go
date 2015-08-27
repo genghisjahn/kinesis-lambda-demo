@@ -2,21 +2,37 @@ package main
 
 import (
 	"bytes"
+	cr "crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	mr "math/rand"
 	"os"
+	"runtime"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/s3"
+	"github.com/AdRoll/goamz/sqs"
 	"github.com/lib/pq"
 )
+
+var SQS *sqs.SQS
+
+var bufferCount = 50 //Playing with this get's different speep through puts.
+//The mbAir needs it around 50 or it starts erroring out.
+//The mbPro can handle higher values, but diminishing returns.
+
+//But, even set at 50, the mbAir can put 100,000 items in the queu in  48 seconds.
+
+var sem = make(chan bool, bufferCount)
 
 type dbInfo struct {
 	Host     string
@@ -45,7 +61,273 @@ func getDBSettings() *dbInfo {
 	return &db
 }
 
+type createdata func(int) error
+
+func createUserData() {
+	ids := getUserIDs()
+	log.Println("userID count:", len(ids))
+	if dataErr := createSubscriptions(ids); dataErr != nil {
+		panic(fmt.Sprintf("%v", dataErr))
+	}
+}
+
+func createLang(ids []int) error {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	txn, errT := db.Begin()
+	if errT != nil {
+		log.Println(errT)
+		return errT
+	}
+	stmt, errPrep := txn.Prepare(pq.CopyIn("userinfo", "userid", "langcode"))
+	if errPrep != nil {
+		log.Fatal(errPrep)
+	}
+
+	log.Println("Start For...")
+	var wg sync.WaitGroup
+	for _, id := range ids {
+
+		userID := id
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			_, errA := stmt.Exec(userID, "en")
+			if errA != nil {
+				log.Fatal(errA)
+			}
+		}(userID)
+
+	}
+	wg.Wait()
+	log.Println("End For")
+	log.Println("Start Exec")
+	_, errEX := stmt.Exec()
+	if errEX != nil {
+		log.Fatal(errEX)
+	}
+	log.Println("End Exec")
+
+	errClose := stmt.Close()
+	if errClose != nil {
+		log.Fatal(errClose)
+	}
+	log.Println("Start Commit")
+	errCommit := txn.Commit()
+	if errCommit != nil {
+		log.Fatal(errCommit)
+	}
+	log.Println("End Commit")
+	return nil
+}
+
+func createDevices(ids []int) error {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	txn, errT := db.Begin()
+	if errT != nil {
+		log.Println(errT)
+		return errT
+	}
+	stmt, errPrep := txn.Prepare(pq.CopyIn("userdevices", "userid", "token", "endpointarn"))
+	if errPrep != nil {
+		log.Fatal(errPrep)
+	}
+
+	log.Println("Start For...")
+	var wg sync.WaitGroup
+	for _, id := range ids {
+
+		userID := id
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			mr.Seed(time.Now().UnixNano())
+			numDevs := mr.Intn(3) + 1
+			for i := 0; i < numDevs; i++ {
+				b := make([]byte, 32)
+				c := make([]byte, 16)
+				cr.Read(b)
+				cr.Read(c)
+				token := fmt.Sprintf("%X", b[0:32])
+				arn := fmt.Sprintf("arn:%X", c[0:8])
+				_, errA := stmt.Exec(userID, token, arn)
+				if errA != nil {
+					log.Fatal(errA)
+				}
+			}
+		}(userID)
+
+	}
+	wg.Wait()
+	log.Println("End For")
+	log.Println("Start Exec")
+	_, errEX := stmt.Exec()
+	if errEX != nil {
+		log.Fatal(errEX)
+	}
+	log.Println("End Exec")
+
+	errClose := stmt.Close()
+	if errClose != nil {
+		log.Fatal(errClose)
+	}
+	log.Println("Start Commit")
+	errCommit := txn.Commit()
+	if errCommit != nil {
+		log.Fatal(errCommit)
+	}
+	log.Println("End Commit")
+	return nil
+
+}
+
+// func createGroups(id int) error {
+// 	return fmt.Errorf("Not implemented")
+//
+// }
+
+func createSubscriptions(ids []int) error {
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	txn, errT := db.Begin()
+	if errT != nil {
+		log.Println(errT)
+		return errT
+	}
+	stmt, errPrep := txn.Prepare(pq.CopyIn("subscription", "topicid", "userid"))
+	if errPrep != nil {
+		log.Fatal(errPrep)
+	}
+
+	log.Println("Start For...")
+	var wg sync.WaitGroup
+	for _, id := range ids {
+
+		userID := id
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			mr.Seed(time.Now().UnixNano())
+			numSubs := mr.Intn(5) + 1
+			for i := 0; i < numSubs; i++ {
+				topicID := i + 1
+				_, errA := stmt.Exec(topicID, userID)
+				if errA != nil {
+					log.Fatal(errA)
+				}
+			}
+		}(userID)
+
+	}
+	wg.Wait()
+	log.Println("End For")
+	log.Println("Start Exec")
+	_, errEX := stmt.Exec()
+	if errEX != nil {
+		log.Fatal(errEX)
+	}
+	log.Println("End Exec")
+
+	errClose := stmt.Close()
+	if errClose != nil {
+		log.Fatal(errClose)
+	}
+	log.Println("Start Commit")
+	errCommit := txn.Commit()
+	if errCommit != nil {
+		log.Fatal(errCommit)
+	}
+	log.Println("End Commit")
+	return nil
+
+}
+
+func proxySNS(msgs []sqs.Message) {
+	pub, sec, _ := getSettings()
+	sqs, err := getQueue("sns-prox", pub, sec)
+	if err != nil {
+		panic(err)
+	}
+	_, respErr := sqs.SendMessageBatch(msgs)
+	if respErr != nil {
+		log.Println("ERROR:", respErr)
+	}
+}
+
 func main() {
+	//pagecount := getDevicesByTopicIDPageCount(1
+	n := runtime.NumCPU()
+	log.Println("Num CPUS:", n)
+	runtime.GOMAXPROCS(n)
+	mr.Seed(time.Now().UnixNano())
+	randomPage := mr.Intn(20) + 1
+	var arns []string
+	log.Println("Start...Page:", randomPage)
+	arns = getDevicesArnsByTopicIDPage(1, randomPage, 50000)
+	msgSlice := make([]sqs.Message, 0, 10)
+	msgAll := [][]sqs.Message{}
+	for _, v := range arns {
+		tempData := fmt.Sprintf("arn:%v|DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!DEMOJSONPAYLOADDATA!!!!!!!!!", v)
+		msg := sqs.Message{Body: base64.StdEncoding.EncodeToString([]byte(tempData))}
+		msgSlice = append(msgSlice, msg)
+		if len(msgSlice) == 10 {
+			msgAll = append(msgAll, msgSlice)
+			msgSlice = []sqs.Message{}
+		}
+	}
+	for _, s := range msgAll {
+		s := s //It's idomatic go I swear! http://golang.org/doc/effective_go.html#channels
+
+		//Using the Semaphore
+		sem <- true
+		go func(sl10 []sqs.Message) {
+			proxySNS(sl10)
+			defer func() { <-sem }()
+		}(s)
+
+	}
+	for i := 0; i < cap(sem); i++ {
+		sem <- true
+	}
+	log.Println("End...")
+
+	return
+
+	pagecount := 21
+	log.Println("Page Count:", pagecount)
+	var wg sync.WaitGroup
+	for i := 0; i < pagecount; i++ {
+		wg.Add(1)
+		num := i
+		go func() {
+			defer wg.Done()
+			arns := getDevicesArnsByTopicIDPage(1, num+1, 100000)
+			if len(arns) > 0 {
+				log.Println(num+1, arns[0])
+			} else {
+				log.Println(num+1, "was zero length")
+			}
+		}()
+	}
+	log.Println("Waiting")
+	wg.Wait()
+	log.Println("Done")
+}
+
+func downloadBucketStuff() {
 	for k, v := range os.Args {
 		log.Println(k, v)
 	}
@@ -68,6 +350,123 @@ func main() {
 	log.Println("Error: os.Args was 1 length.")
 }
 
+func getDevicesByTopicIDPageCount(topicID int) int {
+	var count int
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	rows, err := db.Query(`
+		select
+			((count(u.endpointarn)/100000)+1) as pagecoun
+		from
+			subscription s ,userdevices u
+		where
+			s.topicid= $1 and
+			s.userID=u.userid
+
+;`, topicID)
+	if err != nil {
+		panic(err)
+	}
+	rows.Next()
+	errScan := rows.Scan(&count)
+	if errScan != nil {
+		panic(errScan)
+	}
+	return count
+}
+
+func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
+	var arns []string
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	rows, err := db.Query(`
+		select
+			u.endpointarn
+		from
+			subscription s ,userdevices u
+		where
+			s.topicid= $1 and
+			s.userID=u.userid
+			order by u.userid
+			limit $2 offset $3
+;`, topicID, pagesize, (pagenum-1)*pagesize)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var arn string
+		errScan := rows.Scan(&arn)
+		if errScan != nil {
+			panic(errScan)
+		}
+		arns = append(arns, arn)
+	}
+	return arns
+}
+
+func getUserIDsByTopicID(topicID int) []int {
+	var ids []int
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	log.Println("Starting Query...")
+	rows, err := db.Query("select userid from subscription where topicid= $1", topicID)
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Query Complete!")
+	log.Println("Starting loop")
+	for rows.Next() {
+		var userid int
+		errScan := rows.Scan(&userid)
+		if errScan != nil {
+			panic(errScan)
+		}
+		ids = append(ids, userid)
+	}
+	log.Println("Loop Complete!")
+	log.Println("Count:", len(ids))
+	return ids
+}
+
+func getUserIDs() []int {
+	var ids []int
+	info := getDBSettings()
+	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
+	defer db.Close()
+	if errCon != nil {
+		log.Fatal(errCon)
+	}
+	log.Println("Starting Query...")
+	rows, err := db.Query("SELECT userid FROM jobuser where jobid = 'def456'")
+	if err != nil {
+		panic(err)
+	}
+	log.Println("Query Complete!")
+	log.Println("Starting loop")
+	for rows.Next() {
+		var userid int
+		errScan := rows.Scan(&userid)
+		if errScan != nil {
+			panic(errScan)
+		}
+		ids = append(ids, userid)
+	}
+	log.Println("Loop Complete!")
+	return ids
+}
+
 func copyDataToDB(data []byte) error {
 	info := getDBSettings()
 	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
@@ -80,7 +479,7 @@ func copyDataToDB(data []byte) error {
 		log.Println(errT)
 		return errT
 	}
-	stmt, errPrep := txn.Prepare(pq.CopyIn("user_data", "userID", "email"))
+	stmt, errPrep := txn.Prepare(pq.CopyIn("jobuser", "userid", "jobid", "messageid"))
 	if errPrep != nil {
 		log.Fatal(errPrep)
 	}
@@ -101,15 +500,18 @@ func copyDataToDB(data []byte) error {
 		}
 
 		email := record[0]
+		_ = email
+		jobid := "ghi789"
 		userID, _ := strconv.Atoi(record[1])
+		_ = userID
 		wg.Add(1)
 		go func(id int, e string) {
 			defer wg.Done()
-			_, errA := stmt.Exec(id, e)
+			_, errA := stmt.Exec(id, e, "100")
 			if errA != nil {
 				log.Fatal(errA)
 			}
-		}(userID, email)
+		}(lineCount+1, jobid)
 		lineCount++
 		if lineCount == 1000000 {
 			break
@@ -163,4 +565,16 @@ func downloadFromBucket(b string, f string) ([]byte, error) {
 	}
 	log.Println("Completed Get!", len(data))
 	return data, nil
+}
+
+func getQueue(name, public, secret string) (*sqs.Queue, error) {
+	auth := aws.Auth{AccessKey: public, SecretKey: secret}
+	region := aws.Region{}
+	region.Name = "us-east-1"
+	region.SQSEndpoint = "http://sqs.us-east-1.amazonaws.com"
+	SQS = sqs.New(auth, region)
+	if SQS == nil {
+		return nil, fmt.Errorf("Can't get sqs reference for %v %v", auth, region)
+	}
+	return SQS.GetQueue(name)
 }
