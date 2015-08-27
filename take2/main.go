@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -51,6 +52,7 @@ func processGroup(c *config, groupID string) error {
 	f := fstmt
 	_, err1 := tx.Exec(declareCursor, 1)
 	rows, err2 := tx.Query(f)
+
 	if err1 != nil {
 		log.Println(err)
 	}
@@ -66,6 +68,10 @@ func processGroup(c *config, groupID string) error {
 			panic(errScan)
 		}
 		arns = append(arns, arn)
+	}
+	psize, _ := strconv.Atoi(c.PageSize)
+	if len(arns) == psize {
+		//do this again until len(arns) is less
 	}
 	if err != nil {
 		panic(err)
