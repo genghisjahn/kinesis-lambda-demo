@@ -23,6 +23,9 @@ var SQS *sqs.SQS
 var bufferCount = 100
 var sem = make(chan bool, bufferCount)
 
+var bufferCount2 = 5
+var sem2 = make(chan bool, bufferCount2)
+
 var lambdaIP string
 
 func getlambdaIP() (string, error) {
@@ -78,6 +81,24 @@ func RemoveIPFromGroup(p string, s string, secGroup string) error {
 }
 
 func main() {
+	var nextID int = 0
+	var arns2 []string
+	var alldone bool
+	var pagesize = 100000
+	for !alldone {
+		log.Println(nextID)
+		arns2, nextID = getDevicesArnsByTopicIDPage(1, nextID, pagesize)
+		for _, v := range arns2 {
+			//fmt.Println(v)
+			_ = v
+		}
+		if len(arns2) < pagesize {
+			alldone = true
+		}
+	}
+	log.Println("Final ID:", nextID)
+	return
+
 	var errIP error
 	if lambdaIP, errIP = getlambdaIP(); errIP != nil {
 		log.Println(errIP)
@@ -122,7 +143,7 @@ func main() {
 				}
 				msgstart := fmt.Sprintf("Started page %v\n", tpm.PageNum)
 				WriteLogMessage(msgstart)
-				arns := getDevicesArnsByTopicIDPage(tpm.TopicID, tpm.PageNum, 10000)
+				arns, _ := getDevicesArnsByTopicIDPage(tpm.TopicID, tpm.PageNum, 10000)
 				//This should return the arn & the lang for the user
 				//we'd then pull the correct iten out of the message map
 				msgSlice := make([]sqs.Message, 0, 10)
@@ -196,8 +217,8 @@ func publishPageComplete(pagenum int) error {
 	return nil
 }
 
-func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
-	WriteLogMessage(fmt.Sprintf("DB Start: %v %v %v", topicID, pagenum, pagesize))
+func getDevicesArnsByTopicIDPage(topicID, lastID, pagesize int) ([]string, int) {
+	WriteLogMessage(fmt.Sprintf("DB Start: %v %v %v", topicID, lastID, pagesize))
 	var arns []string
 	info := getDBSettings()
 	db, errCon := sql.Open("postgres", fmt.Sprintf("host=%v user=%v password=%v dbname=%v sslmode=require", info.Host, info.Username, info.Password, info.Database))
@@ -205,31 +226,34 @@ func getDevicesArnsByTopicIDPage(topicID, pagenum, pagesize int) []string {
 	if errCon != nil {
 		log.Fatal(errCon)
 	}
-	stmt, err := db.Prepare(`
+
+	querystr := fmt.Sprintf(`
 		select
-			u.endpointarn
+			u.id,u.endpointarn
 		from
 			subscription s ,userdevices u
 		where
-			s.topicid= $1 and
-			s.userID=u.userid
-			order by u.userid
-			limit $2 offset $3
-;`, topicID, pagesize, (pagenum-1)*pagesize)
+			s.topicid= $1
+			and s.userID=u.userid
+			and u.id>$2
+			order by u.id
+			FETCH FIRST %v ROWS ONLY;`, pagesize)
+	rows, err := db.Query(querystr, topicID, lastID)
 	if err != nil {
 		panic(err)
 	}
+	var nID int
 	for rows.Next() {
 		var arn string
-		errScan := rows.Scan(&arn)
+		errScan := rows.Scan(&nID, &arn)
 		if errScan != nil {
 			panic(errScan)
 		}
 		arns = append(arns, arn)
 	}
-	WriteLogMessage(fmt.Sprintf("DB End: %v %v %v", topicID, pagenum, pagesize))
+	WriteLogMessage(fmt.Sprintf("DB End: %v %v %v", topicID, lastID, pagesize))
 
-	return arns
+	return arns, nID
 }
 
 func WriteLogMessage(msg string) {
